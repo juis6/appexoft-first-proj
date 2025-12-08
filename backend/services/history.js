@@ -1,13 +1,11 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma.js"
 
 class HistoryService {
     async getHistory(limit = 20) {
         try {
             const history = await prisma.searchHistory.findMany({
-                orderBy: { timestamp: "desc" },
                 take: limit,
+                orderBy: { timestamp: "desc" },
                 select: { query: true, timestamp: true }
             })
 

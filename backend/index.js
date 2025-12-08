@@ -1,24 +1,14 @@
 import express from "express"
-import { PrismaClient } from "@prisma/client"
-import { PrismaPg } from "@prisma/adapter-pg"
-import pg from "pg"
 import dotenv from "dotenv"
 import cors from "cors"
 import { historyService } from "./services/history.js"
+import { prisma, pool } from "./lib/prisma.js"
+import { youtubeService } from "./services/youtube.js"
 
 dotenv.config()
 
 const PORT = process.env.PORT || 3000
 const app = express()
-
-// Створити PostgreSQL connection pool
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
-
-// Створити adapter
-const adapter = new PrismaPg(pool)
-
-// Ініціалізувати Prisma з adapter
-const prisma = new PrismaClient({ adapter })
 
 app.use(cors())
 app.use(express.json())
@@ -46,7 +36,7 @@ app.get("/health", async (req, res) => {
 
 app.get("/api/history", async (req, res) => {
     try {
-        const limit = parseInt(req.query.limit)
+        const limit = parseInt(req.query.limit) || 20
         const history = await historyService.getHistory(limit);
         res.json({ history })
     } catch (error) {
@@ -55,16 +45,34 @@ app.get("/api/history", async (req, res) => {
 })
 
 app.post('/api/history', async (req, res) => {
-  try {
-    const { query } = req.body;
-    if (!query) {
-      return res.status(400).json({ error: 'Query is required' });
+    try {
+        const { query } = req.body;
+        if (!query) {
+            return res.status(400).json({ error: 'Query is required' });
+        }
+        await historyService.addToHistory(query);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
-    await historyService.addToHistory(query);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+});
+
+app.get('/api/search', async (req, res) => {
+    try {
+        const { q, pageToken, maxResults = 12 } = req.query;
+
+        if (!q) {
+            return res.status(400).json({ error: 'Query parameter "q" is required' });
+        }
+
+        await historyService.addToHistory(q);
+
+        const result = await youtubeService.searchVideos(q, pageToken, parseInt(maxResults));
+        res.json(result);
+    } catch (error) {
+        console.error('Search error:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.listen(PORT, () => {
