@@ -1,9 +1,12 @@
 import express from "express"
 import dotenv from "dotenv"
 import cors from "cors"
+import morgan from "morgan"
 import { historyService } from "./services/history.js"
 import { prisma, pool } from "./lib/prisma.js"
 import { youtubeService } from "./services/youtube.js"
+import { cacheService } from "./services/cache.js"
+import { error } from "console"
 
 dotenv.config()
 
@@ -12,6 +15,7 @@ const app = express()
 
 app.use(cors())
 app.use(express.json())
+app.use(morgan("tiny"))
 
 app.get("/", (req, res) => {
     res.json({ msg: "YouTube Video Search API" })
@@ -65,15 +69,38 @@ app.get('/api/search', async (req, res) => {
             return res.status(400).json({ error: 'Query parameter "q" is required' });
         }
 
+        const cache = await cacheService.getSearchCache(q, pageToken)
+        if (cache) {
+            console.log("Cache HIT for query:", q)
+            return res.json(cache)
+        }
+        console.log("Cache MISS for query:", q)
+
         await historyService.addToHistory(q);
 
         const result = await youtubeService.searchVideos(q, pageToken, parseInt(maxResults));
+
+        await cacheService.setSearchCache(q, pageToken, result)
+
         res.json(result);
     } catch (error) {
         console.error('Search error:', error);
         res.status(500).json({ error: error.message });
     }
 });
+
+app.delete('/api/cache/clear', async (req, res) => {
+    try {
+        await cacheService.clearExpiredCache();
+        res.json({ message: 'Expired cache cleared successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.use((req, res) => {
+    res.status(404).json({ error: "Endoint not found" })
+})
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`)
