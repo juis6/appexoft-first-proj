@@ -25,6 +25,25 @@ class HistoryService {
             console.log("Error adding to history:", error)
         }
     }
+
+    async getAnalytics(limit = 10) {
+        try {
+            const analytics = await prisma.$queryRaw`
+                SELECT 
+                    query,
+                    COUNT(*)::int as count
+                FROM search_history
+                GROUP BY query
+                ORDER BY count DESC
+                LIMIT ${limit}
+                `;
+
+            return analytics;
+        } catch (error) {
+            console.error('Error fetching analytics:', error);
+            return [];
+        }
+    }
 }
 
 export const historyService = new HistoryService()

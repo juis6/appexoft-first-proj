@@ -124,6 +124,16 @@ app.delete('/api/cache/clear', async (req, res) => {
     }
 });
 
+app.get('/api/analytics', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        const analytics = await historyService.getAnalytics(limit);
+        res.json(analytics);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.use((req, res) => {
     res.status(404).json({ error: "Endoint not found" })
 })
