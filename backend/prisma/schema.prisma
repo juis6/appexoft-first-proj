@@ -10,8 +10,44 @@ model SearchHistory {
   id        Int      @id @default(autoincrement())
   query     String
   timestamp DateTime @default(now())
-  
+
   @@index([timestamp])
   @@index([query])
   @@map("search_history")
+}
+
+model Video {
+  id           Int      @id @default(autoincrement())
+  videoId      String   @unique
+  title        String
+  description  String   @db.Text
+  thumbnailUrl String
+  publishedAt  DateTime
+  viewCount    Int?
+  likeCount    Int?
+  commentCount Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([videoId])
+  @@map("videos")
+}
+
+model SearchCache {
+  id            Int     @id @default(autoincrement())
+  query         String
+  pageToken     String? @default("")
+  results       Json
+  totalResults  Int
+  nextPageToken String?
+  prevPageToken String?
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@unique([query, pageToken])
+  @@index([query])
+  @@index([expiresAt])
+  @@map("search_cache")
 }
