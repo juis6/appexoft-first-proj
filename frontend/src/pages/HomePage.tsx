@@ -1,21 +1,23 @@
-import { useState, useEffect } from 'react';
-import { useQuery } from '@apollo/client';
-import { useNavigate, useLocation } from 'react-router-dom';
-import SearchBar from '../components/SearchBar';
-import VideoCard from '../components/VideoCard';
-import { SEARCH_VIDEOS } from '../graphql/queries';
-import type { Video } from '../types';
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import SearchBar from "../components/SearchBar";
+import VideoCard from "../components/VideoCard";
+import { apiClient } from "../lib/api";
+import type { SearchResult } from "../types";
 
 export default function HomePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
+  const [searchData, setSearchData] = useState<SearchResult | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<Error | null>(null);
 
   useEffect(() => {
     const stateSearchQuery = location.state?.searchQuery;
     const statePageToken = location.state?.pageToken;
-    
+
     if (stateSearchQuery) {
       setSearchQuery(stateSearchQuery);
     }
@@ -24,15 +26,26 @@ export default function HomePage() {
     }
   }, [location.state]);
 
-  const { data: searchData, loading: searchLoading, error: searchError } = useQuery(SEARCH_VIDEOS, {
-    variables: {
-      q: searchQuery,
-      pageToken,
-      maxResults: 12,
-    },
-    skip: !searchQuery,
-    fetchPolicy: 'cache-and-network',
-  });
+  useEffect(() => {
+    if (searchQuery) {
+      performSearch();
+    }
+  }, [searchQuery, pageToken]);
+
+  const performSearch = async () => {
+    setSearchLoading(true);
+    setSearchError(null);
+
+    try {
+      const result = await apiClient.searchVideos(searchQuery, pageToken, 12);
+      setSearchData(result);
+    } catch (error) {
+      setSearchError(error as Error);
+      console.error("Search error:", error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -40,11 +53,11 @@ export default function HomePage() {
   };
 
   const handleVideoClick = (videoId: string) => {
-    navigate(`/video/${videoId}`, { 
-      state: { 
+    navigate(`/video/${videoId}`, {
+      state: {
         searchQuery,
-        pageToken: searchData?.searchVideos?.nextPageToken || undefined
-      } 
+        pageToken: searchData?.nextPageToken || undefined,
+      },
     });
   };
 
@@ -78,10 +91,12 @@ export default function HomePage() {
 
           {searchError && (
             <div className="col-span-full bg-red-600 bg-opacity-80 rounded-3xl p-10 text-center shadow-lg">
-              <h2 className="text-3xl font-bold mb-4">Oops! Something went wrong</h2>
-              <p className="mb-6">Please try again or check your connection.</p>
+              <h2 className="text-3xl font-bold mb-4">
+                Oops! Something went wrong
+              </h2>
+              <p className="mb-6">{searchError.message}</p>
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => performSearch()}
                 className="px-8 py-4 bg-gradient-to-r from-yellow-400 to-red-500 rounded-full font-bold text-black hover:brightness-110 transition"
               >
                 Retry Search
@@ -89,38 +104,48 @@ export default function HomePage() {
             </div>
           )}
 
-          {!searchLoading && !searchError && searchData?.searchVideos?.results?.length > 0 && (
-            <>
-              {searchData.searchVideos.results.map((video: Video) => (
-                <VideoCard
-                  key={video.videoId}
-                  video={video}
-                  onClick={() => handleVideoClick(video.videoId)}
-                />
-              ))}
-            </>
-          )}
+          {!searchLoading &&
+            !searchError &&
+            searchData?.results &&
+            searchData.results.length > 0 && (
+              <>
+                {searchData.results.map((video) => (
+                  <VideoCard
+                    key={video.videoId}
+                    video={video}
+                    onClick={() => handleVideoClick(video.videoId)}
+                  />
+                ))}
+              </>
+            )}
 
-          {searchQuery && !searchLoading && !searchError && searchData?.searchVideos?.results?.length === 0 && (
-            <div className="col-span-full bg-white/20 rounded-3xl py-20 text-center shadow-lg">
-              <h2 className="text-3xl font-semibold mb-4">No videos found</h2>
-              <p>Try a different search term</p>
-            </div>
-          )}
+          {searchQuery &&
+            !searchLoading &&
+            !searchError &&
+            (!searchData?.results || searchData.results.length === 0) && (
+              <div className="col-span-full bg-white/20 rounded-3xl py-20 text-center shadow-lg">
+                <h2 className="text-3xl font-semibold mb-4">No videos found</h2>
+                <p>Try a different search term</p>
+              </div>
+            )}
         </section>
 
-        {!searchLoading && !searchError && searchData?.searchVideos && (
+        {!searchLoading && !searchError && searchData && (
           <div className="flex justify-center gap-6 mt-12">
             <button
-              onClick={() => setPageToken(searchData.searchVideos.prevPageToken)}
-              disabled={!searchData.searchVideos.prevPageToken}
+              onClick={() =>
+                setPageToken(searchData.prevPageToken || undefined)
+              }
+              disabled={!searchData.prevPageToken}
               className="px-8 py-3 rounded-full bg-white bg-opacity-20 hover:bg-opacity-40 disabled:opacity-50 transition font-semibold"
             >
               ← Previous
             </button>
             <button
-              onClick={() => setPageToken(searchData.searchVideos.nextPageToken)}
-              disabled={!searchData.searchVideos.nextPageToken}
+              onClick={() =>
+                setPageToken(searchData.nextPageToken || undefined)
+              }
+              disabled={!searchData.nextPageToken}
               className="px-8 py-3 rounded-full bg-white bg-opacity-20 hover:bg-opacity-40 disabled:opacity-50 transition font-semibold"
             >
               Next →

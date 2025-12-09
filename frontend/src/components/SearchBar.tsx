@@ -1,28 +1,41 @@
-import { useState, useRef, useEffect } from 'react';
-import { useQuery } from '@apollo/client';
-import { GET_SEARCH_HISTORY } from '../graphql/queries';
-import type { SearchBarProps, SearchHistoryItem } from '../types';
-import { Search } from 'lucide-react';
+import { useState, useRef, useEffect } from "react";
+import { apiClient } from "../lib/api";
+import type { SearchBarProps, SearchHistoryItem } from "../types";
+import { Search } from "lucide-react";
 
-export default function SearchBar({ onSearch, isLoading = false, initialValue = '' }: SearchBarProps) {
+export default function SearchBar({
+  onSearch,
+  isLoading = false,
+  initialValue = "",
+}: SearchBarProps) {
   const [query, setQuery] = useState(initialValue);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [history, setHistory] = useState<SearchHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const { data: historyData, loading: historyLoading, error: historyError } = useQuery(GET_SEARCH_HISTORY, {
-    fetchPolicy: 'cache-and-network',
-  });
-
-  useEffect(() => {
-    console.log('Search History Data:', historyData);
-    console.log('Search History Loading:', historyLoading);
-    console.log('Search History Error:', historyError);
-  }, [historyData, historyLoading, historyError]);
 
   useEffect(() => {
     setQuery(initialValue);
   }, [initialValue]);
+
+  useEffect(() => {
+    if (isDropdownOpen) {
+      loadHistory();
+    }
+  }, [isDropdownOpen]);
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await apiClient.getSearchHistory(20);
+      setHistory(response.history);
+    } catch (error) {
+      console.error("Error loading history:", error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,14 +53,18 @@ export default function SearchBar({ onSearch, isLoading = false, initialValue = 
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
-          inputRef.current && !inputRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
         setIsDropdownOpen(false);
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
@@ -81,32 +98,46 @@ export default function SearchBar({ onSearch, isLoading = false, initialValue = 
             </div>
             <div className="max-h-[300px] overflow-y-auto">
               {historyLoading ? (
-                <div className="px-4 py-3 text-gray-500">Loading history...</div>
-              ) : historyError ? (
-                <div className="px-4 py-3 text-red-500">Error loading history</div>
-              ) : historyData?.searchHistory?.history?.length > 0 ? (
-                historyData.searchHistory.history.map((item: SearchHistoryItem) => (
+                <div className="px-4 py-3 text-gray-500">
+                  Loading history...
+                </div>
+              ) : history.length > 0 ? (
+                history.map((item: SearchHistoryItem) => (
                   <button
                     key={item.timestamp}
                     onClick={() => handleHistoryClick(item.query)}
                     className="w-full px-4 py-3 text-left hover:bg-white/50 transition-colors duration-150 flex items-center justify-between group"
                   >
                     <div className="flex items-center">
-                      <svg className="w-5 h-5 mr-3 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <svg
+                        className="w-5 h-5 mr-3 text-gray-400 group-hover:text-blue-500 transition-colors"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
                       </svg>
-                      <span className="text-gray-700 group-hover:text-blue-600 transition-colors">{item.query}</span>
+                      <span className="text-gray-700 group-hover:text-blue-600 transition-colors">
+                        {item.query}
+                      </span>
                     </div>
                     <span className="text-sm text-gray-400">
-                      {new Date(item.timestamp).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
+                      {new Date(item.timestamp).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
                       })}
                     </span>
                   </button>
                 ))
               ) : (
-                <div className="px-4 py-3 text-gray-500">No recent searches</div>
+                <div className="px-4 py-3 text-gray-500">
+                  No recent searches
+                </div>
               )}
             </div>
           </div>
