@@ -6,7 +6,6 @@ import { historyService } from "./services/history.js"
 import { prisma, pool } from "./lib/prisma.js"
 import { youtubeService } from "./services/youtube.js"
 import { cacheService } from "./services/cache.js"
-import { error } from "console"
 
 dotenv.config()
 
@@ -85,6 +84,33 @@ app.get('/api/search', async (req, res) => {
         res.json(result);
     } catch (error) {
         console.error('Search error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/video/:videoId', async (req, res) => {
+    try {
+        const { videoId } = req.params;
+
+        if (!videoId) {
+            return res.status(400).json({ error: 'Video ID is required' });
+        }
+
+        const cached = await cacheService.getVideoCache(videoId);
+        if (cached) {
+            console.log('Cache HIT for video:', videoId);
+            return res.json(cached);
+        }
+
+        console.log('Cache MISS for video:', videoId);
+
+        const details = await youtubeService.getVideoDetails(videoId);
+
+        await cacheService.setVideoCache(details);
+
+        res.json(details);
+    } catch (error) {
+        console.error('Video details error:', error);
         res.status(500).json({ error: error.message });
     }
 });

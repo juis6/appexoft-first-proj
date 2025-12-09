@@ -54,6 +54,48 @@ class YouTubeService {
             prevPageToken: data.prevPageToken || null,
         };
     }
+
+    async getVideoDetails(videoId) {
+        if (!RAPIDAPI_KEY) {
+            throw new Error('RAPIDAPI_KEY is required');
+        }
+
+        const url = 'https://youtube-v31.p.rapidapi.com/videos';
+        const params = new URLSearchParams({
+            id: videoId,
+            part: 'snippet,statistics',
+        });
+
+        const response = await fetch(`${url}?${params}`, {
+            headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'youtube-v31.p.rapidapi.com'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`RapidAPI error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.items || data.items.length === 0) {
+            throw new Error('Video not found');
+        }
+
+        const video = data.items[0];
+
+        return {
+            videoId: video.id,
+            title: video.snippet.title,
+            description: video.snippet.description,
+            thumbnailUrl: video.snippet.thumbnails?.high?.url || video.snippet.thumbnails?.default?.url,
+            publishedAt: video.snippet.publishedAt,
+            viewCount: parseInt(video.statistics.viewCount || '0'),
+            likeCount: parseInt(video.statistics.likeCount || '0'),
+            commentCount: parseInt(video.statistics.commentCount || '0'),
+        };
+    }
 }
 
 export const youtubeService = new YouTubeService();
