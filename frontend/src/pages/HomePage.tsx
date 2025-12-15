@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import SearchBar from "../components/SearchBar";
 import VideoCard from "../components/VideoCard";
 import { apiClient } from "../lib/api";
-import type { SearchResult } from "../types";
+import type { Video, SearchResult } from "../types";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -11,8 +11,8 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
   const [searchData, setSearchData] = useState<SearchResult | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState<Error | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const stateSearchQuery = location.state?.searchQuery;
@@ -33,17 +33,15 @@ export default function HomePage() {
   }, [searchQuery, pageToken]);
 
   const performSearch = async () => {
-    setSearchLoading(true);
-    setSearchError(null);
-
+    setLoading(true);
+    setError(null);
     try {
-      const result = await apiClient.searchVideos(searchQuery, pageToken, 12);
-      setSearchData(result);
-    } catch (error) {
-      setSearchError(error as Error);
-      console.error("Search error:", error);
+      const data = await apiClient.searchVideos(searchQuery, pageToken, 12);
+      setSearchData(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
-      setSearchLoading(false);
+      setLoading(false);
     }
   };
 
@@ -61,6 +59,9 @@ export default function HomePage() {
     });
   };
 
+  const shouldShowResults =
+    !loading && !error && searchData?.results && searchData.results.length > 0;
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-r from-purple-700 via-blue-600 to-cyan-500 text-white flex flex-col items-center p-8">
       <header className="mb-12 w-full max-w-7xl text-center">
@@ -72,85 +73,82 @@ export default function HomePage() {
         </p>
       </header>
 
-      <div className="w-full max-w-4xl mb-12">
+      <div className="w-full max-w-4xl mb-12 flex justify-center">
         <SearchBar
           onSearch={handleSearch}
-          isLoading={searchLoading}
+          isLoading={loading}
           initialValue={searchQuery}
         />
       </div>
 
       <main className="w-full max-w-7xl">
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {searchLoading && (
-            <div className="col-span-full flex flex-col items-center justify-center py-20 bg-white/20 rounded-3xl shadow-lg">
-              <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-white border-solid"></div>
-              <p className="mt-8 text-2xl font-semibold">Searching videos...</p>
-            </div>
-          )}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-20 bg-white/20 rounded-3xl shadow-lg">
+            <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-white border-solid"></div>
+            <p className="mt-8 text-2xl font-semibold">Searching videos...</p>
+          </div>
+        )}
 
-          {searchError && (
-            <div className="col-span-full bg-red-600 bg-opacity-80 rounded-3xl p-10 text-center shadow-lg">
-              <h2 className="text-3xl font-bold mb-4">
-                Oops! Something went wrong
-              </h2>
-              <p className="mb-6">{searchError.message}</p>
-              <button
-                onClick={() => performSearch()}
-                className="px-8 py-4 bg-gradient-to-r from-yellow-400 to-red-500 rounded-full font-bold text-black hover:brightness-110 transition"
-              >
-                Retry Search
-              </button>
-            </div>
-          )}
-
-          {!searchLoading &&
-            !searchError &&
-            searchData?.results &&
-            searchData.results.length > 0 && (
-              <>
-                {searchData.results.map((video) => (
-                  <VideoCard
-                    key={video.videoId}
-                    video={video}
-                    onClick={() => handleVideoClick(video.videoId)}
-                  />
-                ))}
-              </>
-            )}
-
-          {searchQuery &&
-            !searchLoading &&
-            !searchError &&
-            (!searchData?.results || searchData.results.length === 0) && (
-              <div className="col-span-full bg-white/20 rounded-3xl py-20 text-center shadow-lg">
-                <h2 className="text-3xl font-semibold mb-4">No videos found</h2>
-                <p>Try a different search term</p>
-              </div>
-            )}
-        </section>
-
-        {!searchLoading && !searchError && searchData && (
-          <div className="flex justify-center gap-6 mt-12">
+        {error && (
+          <div className="bg-red-600 bg-opacity-80 rounded-3xl p-10 text-center shadow-lg">
+            <h2 className="text-3xl font-bold mb-4">Oops!</h2>
+            <p className="text-xl mb-6">{error}</p>
             <button
-              onClick={() =>
-                setPageToken(searchData.prevPageToken || undefined)
-              }
-              disabled={!searchData.prevPageToken}
-              className="px-8 py-3 rounded-full bg-white bg-opacity-20 hover:bg-opacity-40 disabled:opacity-50 transition font-semibold"
+              onClick={() => performSearch()}
+              className="px-8 py-4 bg-white text-red-600 rounded-full font-bold hover:bg-gray-100 transition"
             >
-              ← Previous
-            </button>
-            <button
-              onClick={() =>
-                setPageToken(searchData.nextPageToken || undefined)
-              }
-              disabled={!searchData.nextPageToken}
-              className="px-8 py-3 rounded-full bg-white bg-opacity-20 hover:bg-opacity-40 disabled:opacity-50 transition font-semibold"
-            >
-              Next →
+              Try Again
             </button>
           </div>
+        )}
+
+        {!loading &&
+          !error &&
+          searchQuery &&
+          searchData?.results &&
+          searchData.results.length === 0 && (
+            <div className="bg-white/20 rounded-3xl p-10 text-center shadow-lg">
+              <p className="text-2xl">
+                No videos found. Try a different search!
+              </p>
+            </div>
+          )}
+
+        {shouldShowResults && (
+          <>
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
+              {searchData.results.map((video: Video) => (
+                <VideoCard
+                  key={video.videoId}
+                  video={video}
+                  onClick={() => handleVideoClick(video.videoId)}
+                />
+              ))}
+            </section>
+
+            {(searchData.prevPageToken || searchData.nextPageToken) && (
+              <div className="flex justify-center gap-6 mt-12">
+                <button
+                  onClick={() =>
+                    setPageToken(searchData.prevPageToken || undefined)
+                  }
+                  disabled={!searchData.prevPageToken}
+                  className="px-8 py-3 rounded-full bg-white bg-opacity-20 hover:bg-opacity-40 disabled:opacity-50 disabled:cursor-not-allowed transition font-semibold"
+                >
+                  ← Previous
+                </button>
+                <button
+                  onClick={() =>
+                    setPageToken(searchData.nextPageToken || undefined)
+                  }
+                  disabled={!searchData.nextPageToken}
+                  className="px-8 py-3 rounded-full bg-white bg-opacity-20 hover:bg-opacity-40 disabled:opacity-50 disabled:cursor-not-allowed transition font-semibold"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

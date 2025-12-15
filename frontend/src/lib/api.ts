@@ -1,6 +1,7 @@
 import type {
   VideoDetails,
   SearchResult,
+  ApiSearchResponse,
   SearchHistoryItem,
   SearchAnalyticsItem,
 } from "../types";
@@ -59,7 +60,22 @@ class ApiClient {
       params.append("pageToken", pageToken);
     }
 
-    return this.request<SearchResult>(`/api/search?${params}`);
+    // Отримуємо відповідь з бекенду (використовуємо "result")
+    const response = await this.request<ApiSearchResponse>(
+      `/api/search?${params}`
+    );
+
+    // Конвертуємо "result" в "results" для фронтенду
+    const normalizedResponse: SearchResult = {
+      results: response.result || [],
+      totalResults: response.totalResults || 0,
+      nextPageToken: response.nextPageToken,
+      prevPageToken: response.prevPageToken,
+    };
+
+    console.log("📦 API Client normalized response:", normalizedResponse);
+
+    return normalizedResponse;
   }
 
   async getVideoDetails(videoId: string): Promise<VideoDetails> {

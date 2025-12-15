@@ -13,24 +13,22 @@ export default function VideoPage() {
 
   const [video, setVideo] = useState<VideoDetailsType | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (videoId) {
-      fetchVideoDetails();
+      loadVideo();
     }
   }, [videoId]);
 
-  const fetchVideoDetails = async () => {
+  const loadVideo = async () => {
     setLoading(true);
     setError(null);
-
     try {
-      const details = await apiClient.getVideoDetails(videoId!);
-      setVideo(details);
+      const data = await apiClient.getVideoDetails(videoId!);
+      setVideo(data);
     } catch (err) {
-      setError(err as Error);
-      console.error("Error fetching video details:", err);
+      setError(err instanceof Error ? err.message : "Failed to load video");
     } finally {
       setLoading(false);
     }
@@ -87,16 +85,18 @@ export default function VideoPage() {
                   />
                 </svg>
               </div>
-              <p className="text-2xl text-gray-800 mb-4 font-semibold">
-                Error loading video
-              </p>
-              <p className="text-gray-600 mb-8">{error.message}</p>
-              <button
-                onClick={handleBackToSearch}
-                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-              >
-                Back to Search
-              </button>
+              <div className="relative">
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                  Error Loading Video
+                </h2>
+                <p className="text-gray-600 mb-6">{error}</p>
+                <button
+                  onClick={handleBackToSearch}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                >
+                  Back to Search
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -104,21 +104,33 @@ export default function VideoPage() {
     );
   }
 
-  if (!video) {
-    return null;
-  }
+  if (!video) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-700 via-blue-600 to-cyan-500 py-12">
       <div className="container mx-auto px-4">
-        <VideoDetails video={video} />
-        <div className="mt-8 flex justify-center">
+        <div className="max-w-4xl mx-auto">
           <button
             onClick={handleBackToSearch}
-            className="px-8 py-4 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl border border-white/20 hover:bg-white/95 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            className="mb-8 px-6 py-3 bg-white/20 backdrop-blur-md text-white rounded-full font-semibold shadow-lg hover:bg-white/30 transform hover:scale-105 transition-all duration-200 flex items-center gap-2"
           >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
             Back to Search
           </button>
+
+          <VideoDetails video={video} />
         </div>
       </div>
     </div>

@@ -20,6 +20,13 @@ export interface SearchResult {
   prevPageToken?: string;
 }
 
+export interface ApiSearchResponse {
+  result: Video[];
+  totalResults: number;
+  nextPageToken?: string;
+  prevPageToken?: string;
+}
+
 export interface SearchHistoryItem {
   query: string;
   timestamp: string;
@@ -28,7 +35,7 @@ export interface SearchHistoryItem {
 export interface SearchAnalyticsItem {
   query: string;
   count: number;
-} 
+}
 
 export interface SearchBarProps {
   onSearch: (query: string) => void;
@@ -41,12 +48,10 @@ export interface SearchHistoryProps {
   onSelectQuery: (query: string) => void;
 }
 
-
 export interface VideoCardProps {
   video: Video;
   onClick?: () => void;
 }
-
 
 export interface VideoDetailsProps {
   video: VideoDetails;
