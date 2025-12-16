@@ -21,7 +21,7 @@ class YoutubeService {
                 part: "snippet,id",
                 regionCode: "US",
                 maxResults: 50,
-                order: "date"
+                order: "viewCount"
             }
             const params = new URLSearchParams({ ...defaults, ...query })
 

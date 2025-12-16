@@ -24,6 +24,7 @@ class ApiClient {
     try {
       const response = await fetch(url, {
         ...options,
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...options?.headers,
@@ -34,6 +35,12 @@ class ApiClient {
         const error = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));
+
+        if (error.code === "TOKEN_EXPIRED") {
+          await this.refreshToken();
+          return this.request<T>(endpoint, options);
+        }
+
         throw new Error(
           error.error || `HTTP error! status: ${response.status}`
         );
@@ -44,6 +51,43 @@ class ApiClient {
       console.error("API request failed:", error);
       throw error;
     }
+  }
+
+  async register(
+    email: string,
+    password: string,
+    name?: string
+  ): Promise<{ message: string; user: any }> {
+    return this.request<{ message: string; user: any }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password, name }),
+    });
+  }
+
+  async login(
+    email: string,
+    password: string
+  ): Promise<{ message: string; user: any }> {
+    return this.request<{ message: string; user: any }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  async logout(): Promise<{ message: string }> {
+    return this.request<{ message: string }>("/auth/logout", {
+      method: "POST",
+    });
+  }
+
+  async refreshToken(): Promise<{ message: string }> {
+    return this.request<{ message: string }>("/auth/refresh", {
+      method: "POST",
+    });
+  }
+
+  async getMe(): Promise<{ user: any }> {
+    return this.request<{ user: any }>("/auth/me");
   }
 
   async searchVideos(
@@ -60,20 +104,16 @@ class ApiClient {
       params.append("pageToken", pageToken);
     }
 
-    // Отримуємо відповідь з бекенду (використовуємо "result")
     const response = await this.request<ApiSearchResponse>(
       `/api/search?${params}`
     );
 
-    // Конвертуємо "result" в "results" для фронтенду
     const normalizedResponse: SearchResult = {
       results: response.result || [],
       totalResults: response.totalResults || 0,
       nextPageToken: response.nextPageToken,
       prevPageToken: response.prevPageToken,
     };
-
-    console.log("📦 API Client normalized response:", normalizedResponse);
 
     return normalizedResponse;
   }
@@ -99,12 +139,6 @@ class ApiClient {
 
   async getAnalytics(limit: number = 10): Promise<SearchAnalyticsItem[]> {
     return this.request<SearchAnalyticsItem[]>(`/api/analytics?limit=${limit}`);
-  }
-
-  async clearCache(): Promise<{ message: string }> {
-    return this.request<{ message: string }>("/api/cache/clear", {
-      method: "DELETE",
-    });
   }
 
   async healthCheck(): Promise<{

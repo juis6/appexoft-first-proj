@@ -1,6 +1,6 @@
 import { youtubeService } from "../services/api-service.js"
 import { youtubeSerializer } from "../serializers/api-serializer.js"
-import { prisma } from "../lib/prisma.js"
+import { prisma } from "../utils/prisma.js"
 
 class YoutubeControllers {
     async searchController(req, res) {
@@ -10,7 +10,10 @@ class YoutubeControllers {
             const serialized = youtubeSerializer.serializeSearchResult(data)
 
             await prisma.searchHistory.create({
-                data: { query: req.query.q }
+                data: {
+                    query: req.query.q,
+                    userId: req.user?.userId || null
+                }
             })
 
             res.status(200).json(serialized)
@@ -39,7 +42,12 @@ class YoutubeControllers {
         try {
             const limit = req.query.limit ? parseInt(req.query.limit) : 12
 
+            const whereClause = req.user
+                ? { userId: req.user.userId }
+                : { userId: null }
+
             const data = await prisma.searchHistory.findMany({
+                where: whereClause,
                 orderBy: { timestamp: 'desc' },
                 take: limit
             })
@@ -55,7 +63,10 @@ class YoutubeControllers {
     async addToHistoryController(req, res) {
         try {
             await prisma.searchHistory.create({
-                data: { query: req.body.query }
+                data: {
+                    query: req.body.query,
+                    userId: req.user?.userId || null
+                }
             })
 
             res.status(201).json({ success: true })
@@ -69,8 +80,13 @@ class YoutubeControllers {
         try {
             const limit = req.query.limit ? parseInt(req.query.limit) : 12
 
+            const whereClause = req.user
+                ? { userId: req.user.userId }
+                : { userId: null }
+
             const data = await prisma.searchHistory.groupBy({
                 by: ["query"],
+                where: whereClause,
                 _count: { query: true },
                 orderBy: { _count: { query: "desc" } },
                 take: limit
