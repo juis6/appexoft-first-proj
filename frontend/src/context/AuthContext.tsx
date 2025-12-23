@@ -2,8 +2,9 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { apiClient } from "../lib/api";
 
 interface User {
-  id: number;
+  id: string;
   email: string;
+  username?: string;
   name?: string;
 }
 
@@ -31,7 +32,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const checkAuth = async () => {
     try {
       const response = await apiClient.getMe();
-      setUser(response.user);
+      if (response.success && response.data?.user) {
+        setUser(response.data.user);
+      } else {
+        setUser(null);
+      }
     } catch (error) {
       setUser(null);
     } finally {
@@ -41,17 +46,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const login = async (email: string, password: string) => {
     const response = await apiClient.login(email, password);
-    setUser(response.user);
+    if (response.success && response.data?.user) {
+      setUser(response.data.user);
+    } else {
+      throw new Error(response.message || "Login failed");
+    }
   };
 
   const register = async (email: string, password: string, name?: string) => {
     const response = await apiClient.register(email, password, name);
-    setUser(response.user);
+    if (response.success && response.data?.user) {
+      setUser(response.data.user);
+    } else {
+      throw new Error(response.message || "Registration failed");
+    }
   };
 
   const logout = async () => {
-    await apiClient.logout();
-    setUser(null);
+    try {
+      await apiClient.logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setUser(null);
+    }
   };
 
   const refreshAuth = async () => {

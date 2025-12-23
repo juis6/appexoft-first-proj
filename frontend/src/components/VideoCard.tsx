@@ -2,14 +2,17 @@ import type { VideoCardProps } from "../types";
 import { formatDistanceToNow } from "date-fns";
 
 export default function VideoCard({ video, onClick }: VideoCardProps) {
-  const thumbnailUrl = video.thumbnailUrl
-    .replace("default.jpg", "maxresdefault.jpg")
-    .replace("mqdefault.jpg", "maxresdefault.jpg")
-    .replace("hqdefault.jpg", "maxresdefault.jpg");
+  const thumbnailUrl =
+    video.thumbnail
+      ?.replace("default.jpg", "maxresdefault.jpg")
+      ?.replace("mqdefault.jpg", "maxresdefault.jpg")
+      ?.replace("hqdefault.jpg", "maxresdefault.jpg") || video.thumbnail;
 
-  const formatViewCount = (count?: number) => {
+  const formatViewCount = (count?: string | number) => {
     if (!count) return "0 views";
-    return `${count.toLocaleString()} views`;
+    const numCount = typeof count === "string" ? parseInt(count, 10) : count;
+    if (isNaN(numCount)) return "0 views";
+    return `${numCount.toLocaleString()} views`;
   };
 
   return (
@@ -24,8 +27,8 @@ export default function VideoCard({ video, onClick }: VideoCardProps) {
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
-            if (target.src.includes("maxresdefault")) {
-              target.src = video.thumbnailUrl
+            if (target.src.includes("maxresdefault") && video.thumbnail) {
+              target.src = video.thumbnail
                 .replace("default.jpg", "hqdefault.jpg")
                 .replace("mqdefault.jpg", "hqdefault.jpg");
             }

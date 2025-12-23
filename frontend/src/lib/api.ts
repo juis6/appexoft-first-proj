@@ -57,100 +57,141 @@ class ApiClient {
     email: string,
     password: string,
     name?: string
-  ): Promise<{ message: string; user: any }> {
-    return this.request<{ message: string; user: any }>("/auth/register", {
+  ): Promise<{ success: boolean; message: string; data: { user: any } }> {
+    return this.request<{
+      success: boolean;
+      message: string;
+      data: { user: any };
+    }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, username: name }),
     });
   }
 
   async login(
     email: string,
     password: string
-  ): Promise<{ message: string; user: any }> {
-    return this.request<{ message: string; user: any }>("/auth/login", {
+  ): Promise<{ success: boolean; message: string; data: { user: any } }> {
+    return this.request<{
+      success: boolean;
+      message: string;
+      data: { user: any };
+    }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
   }
 
-  async logout(): Promise<{ message: string }> {
-    return this.request<{ message: string }>("/auth/logout", {
+  async logout(): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>("/auth/logout", {
       method: "POST",
     });
   }
 
-  async refreshToken(): Promise<{ message: string }> {
-    return this.request<{ message: string }>("/auth/refresh", {
-      method: "POST",
-    });
+  async refreshToken(): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(
+      "/auth/refresh",
+      {
+        method: "POST",
+      }
+    );
   }
 
-  async getMe(): Promise<{ user: any }> {
-    return this.request<{ user: any }>("/auth/me");
+  async getMe(): Promise<{ success: boolean; data: { user: any } }> {
+    return this.request<{ success: boolean; data: { user: any } }>(
+      "/auth/profile"
+    );
   }
 
   async searchVideos(
     query: string,
     pageToken?: string,
     maxResults: number = 12
-  ): Promise<SearchResult> {
+  ): Promise<ApiSearchResponse> {
     const params = new URLSearchParams({
       q: query,
       maxResults: maxResults.toString(),
     });
-
     if (pageToken) {
       params.append("pageToken", pageToken);
     }
 
-    const response = await this.request<ApiSearchResponse>(
-      `/api/search?${params}`
-    );
+    const response = await this.request<{
+      success: boolean;
+      data: { videos: any[] };
+    }>(`/api/video/search?${params}`);
 
-    const normalizedResponse: SearchResult = {
-      results: response.result || [],
-      totalResults: response.totalResults || 0,
-      nextPageToken: response.nextPageToken,
-      prevPageToken: response.prevPageToken,
+    return {
+      result: response.data.videos || [],
+      totalResults: response.data.videos?.length || 0,
+      nextPageToken: undefined,
+      prevPageToken: undefined,
     };
-
-    return normalizedResponse;
   }
 
   async getVideoDetails(videoId: string): Promise<VideoDetails> {
-    return this.request<VideoDetails>(`/api/video/${videoId}`);
+    const response = await this.request<{
+      success: boolean;
+      data: { video: any };
+    }>(`/api/video/${videoId}`);
+
+    return response.data.video;
   }
 
-  async getSearchHistory(
-    limit: number = 20
-  ): Promise<{ history: SearchHistoryItem[] }> {
-    return this.request<{ history: SearchHistoryItem[] }>(
-      `/api/history?limit=${limit}`
-    );
+  async getSearchHistory(): Promise<SearchHistoryItem[]> {
+    const response = await this.request<{
+      success: boolean;
+      data: { history: any[] };
+    }>("/api/history");
+
+    return response.data.history.map((item: any) => ({
+      query: item.title || item.videoId,
+      timestamp: item.createdAt,
+    }));
   }
 
-  async addToHistory(query: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>("/api/history", {
+  async addToHistory(
+    videoId: string,
+    title: string,
+    thumbnail: string,
+    channelTitle: string,
+    duration?: string,
+    viewCount?: string
+  ): Promise<void> {
+    await this.request("/api/history", {
       method: "POST",
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({
+        videoId,
+        title,
+        thumbnail,
+        channelTitle,
+        duration,
+        viewCount,
+      }),
     });
   }
 
-  async getAnalytics(limit: number = 10): Promise<SearchAnalyticsItem[]> {
-    return this.request<SearchAnalyticsItem[]>(`/api/analytics?limit=${limit}`);
-  }
+  async getAnalytics(limit: number = 20): Promise<SearchAnalyticsItem[]> {
+    const response = await this.request<{
+      success: boolean;
+      data: { analytics: any[] };
+    }>("/api/history/analytics");
 
-  async healthCheck(): Promise<{
-    status: string;
-    database: string;
-    timestamp: string;
-  }> {
-    return this.request<{
-      status: string;
-      database: string;
-      timestamp: string;
-    }>("/health");
+    const countMap = new Map<string, { query: string; count: number }>();
+
+    response.data.analytics.forEach((item: any) => {
+      const query = item.title || item.videoId;
+      const existing = countMap.get(query);
+      if (existing) {
+        existing.count++;
+      } else {
+        countMap.set(query, { query, count: 1 });
+      }
+    });
+
+    return Array.from(countMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
   }
 }
 

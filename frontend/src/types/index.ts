@@ -2,15 +2,19 @@ export interface Video {
   videoId: string;
   title: string;
   description: string;
-  thumbnailUrl: string;
+  thumbnail: string;
+  channelTitle: string;
   publishedAt: string;
-  viewCount?: number;
+  duration?: string;
+  viewCount?: string;
+  likeCount?: string;
+  commentCount?: string;
 }
 
 export interface VideoDetails extends Video {
-  viewCount: number;
-  likeCount: number;
-  commentCount: number;
+  viewCount: string;
+  likeCount: string;
+  commentCount: string;
 }
 
 export interface SearchResult {

@@ -46,9 +46,10 @@ coverage/
 *.txt
 .cache/
 
-# Build output
+# Build output - TypeScript
 dist/
 build/
+*.tsbuildinfo
 
 # OS files
 Thumbs.db
