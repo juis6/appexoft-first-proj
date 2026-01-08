@@ -34,8 +34,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const response = await apiClient.getMe();
       if (response.success && response.data?.user) {
         setUser(response.data.user);
-      } else {
-        setUser(null);
       }
     } catch (error) {
       setUser(null);

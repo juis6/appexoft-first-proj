@@ -22,7 +22,12 @@ app.use(
   })
 );
 
-app.use(morgan("tiny"));
+if (process.env.NODE_ENV === "development") {
+  app.use(morgan("dev"));
+} else {
+  app.use(morgan("combined"));
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -31,6 +36,7 @@ app.get("/", (_req, res) => {
   res.status(200).json({
     success: true,
     message: "YouTube Video Search API with Authentication",
+    status: "running",
   });
 });
 
@@ -41,11 +47,19 @@ app.use(ErrorMiddleware.notFound);
 app.use(ErrorMiddleware.handle);
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`✓ Server is running on http://localhost:${PORT}`);
+  console.log(`✓ Frontend URL: ${FRONTEND_URL}`);
+  console.log(`✓ Environment: ${process.env.NODE_ENV || "development"}`);
 });
 
 process.on("SIGINT", async () => {
-  console.log("\nShutting down gracefully...");
+  console.log("\n⚠ Shutting down gracefully...");
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  console.log("\n⚠ Shutting down gracefully...");
   await prisma.$disconnect();
   process.exit(0);
 });

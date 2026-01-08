@@ -31,15 +31,20 @@ class ApiClient {
         },
       });
 
+      if (response.status === 401 && !endpoint.includes("/auth/")) {
+        try {
+          await this.refreshToken();
+          return this.request<T>(endpoint, options);
+        } catch (refreshError) {
+          window.location.href = "/login";
+          throw new Error("Session expired. Please login again.");
+        }
+      }
+
       if (!response.ok) {
         const error = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));
-
-        if (error.code === "TOKEN_EXPIRED") {
-          await this.refreshToken();
-          return this.request<T>(endpoint, options);
-        }
 
         throw new Error(
           error.error || `HTTP error! status: ${response.status}`
@@ -98,16 +103,20 @@ class ApiClient {
   }
 
   async getMe(): Promise<{ success: boolean; data: { user: any } }> {
-    return this.request<{ success: boolean; data: { user: any } }>(
-      "/auth/profile"
-    );
+    try {
+      return await this.request<{ success: boolean; data: { user: any } }>(
+        "/auth/profile"
+      );
+    } catch (error) {
+      throw error;
+    }
   }
 
   async searchVideos(
     query: string,
     pageToken?: string,
     maxResults: number = 12
-  ): Promise<ApiSearchResponse> {
+  ): Promise<SearchResult> {
     const params = new URLSearchParams({
       q: query,
       maxResults: maxResults.toString(),
@@ -122,7 +131,7 @@ class ApiClient {
     }>(`/api/video/search?${params}`);
 
     return {
-      result: response.data.videos || [],
+      results: response.data.videos || [],
       totalResults: response.data.videos?.length || 0,
       nextPageToken: undefined,
       prevPageToken: undefined,
@@ -139,15 +148,24 @@ class ApiClient {
   }
 
   async getSearchHistory(): Promise<SearchHistoryItem[]> {
-    const response = await this.request<{
-      success: boolean;
-      data: { history: any[] };
-    }>("/api/history");
+    try {
+      const response = await this.request<{
+        success: boolean;
+        data: { history: any[] };
+      }>("/api/history");
 
-    return response.data.history.map((item: any) => ({
-      query: item.title || item.videoId,
-      timestamp: item.createdAt,
-    }));
+      if (!response.data || !Array.isArray(response.data.history)) {
+        return [];
+      }
+
+      return response.data.history.map((item: any) => ({
+        query: item.title || item.videoId,
+        timestamp: item.createdAt,
+      }));
+    } catch (error) {
+      console.error("Failed to load history:", error);
+      return [];
+    }
   }
 
   async addToHistory(
@@ -174,12 +192,23 @@ class ApiClient {
   async getAnalytics(limit: number = 20): Promise<SearchAnalyticsItem[]> {
     const response = await this.request<{
       success: boolean;
-      data: { analytics: any[] };
+      data: { analytics: { totalSearches: number; recentSearches: any[] } };
     }>("/api/history/analytics");
+
+    if (!response.data || !response.data.analytics) {
+      return [];
+    }
+
+    const { recentSearches } = response.data.analytics;
+
+    if (!Array.isArray(recentSearches)) {
+      console.error("recentSearches is not an array:", recentSearches);
+      return [];
+    }
 
     const countMap = new Map<string, { query: string; count: number }>();
 
-    response.data.analytics.forEach((item: any) => {
+    recentSearches.forEach((item: any) => {
       const query = item.title || item.videoId;
       const existing = countMap.get(query);
       if (existing) {

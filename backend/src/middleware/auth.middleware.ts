@@ -15,18 +15,29 @@ export class AuthMiddleware {
       if (!accessToken) {
         res.status(401).json({
           success: false,
-          error: "Access token not found. Please login.",
+          error: "Access token not found",
+          code: "NO_TOKEN",
         } as IApiResponse);
         return;
       }
 
-      const payload = JwtUtil.verifyAccessToken(accessToken);
-      req.user = payload;
-      next();
+      try {
+        const payload = JwtUtil.verifyAccessToken(accessToken);
+        req.user = payload;
+        next();
+      } catch (error) {
+        res.status(401).json({
+          success: false,
+          error: "Invalid or expired access token",
+          code: "TOKEN_EXPIRED",
+        } as IApiResponse);
+        return;
+      }
     } catch (error) {
       res.status(401).json({
         success: false,
         error: error instanceof Error ? error.message : "Authentication failed",
+        code: "AUTH_ERROR",
       } as IApiResponse);
     }
   }

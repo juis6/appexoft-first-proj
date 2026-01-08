@@ -18,10 +18,11 @@ export default function HistoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiClient.getSearchHistory(50);
-      setHistory(data.history);
+      const data = await apiClient.getSearchHistory();
+      setHistory(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load history");
+      setHistory([]);
     } finally {
       setLoading(false);
     }
@@ -81,7 +82,7 @@ export default function HistoryPage() {
               </div>
             )}
 
-            {history.length === 0 ? (
+            {!history || history.length === 0 ? (
               <div className="text-center py-12">
                 <svg
                   className="w-24 h-24 mx-auto text-gray-400 mb-4"
