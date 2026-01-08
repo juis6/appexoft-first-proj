@@ -34,7 +34,7 @@ export class AuthMiddleware {
         return;
       }
     } catch (error) {
-      res.status(401).json({
+      res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : "Authentication failed",
         code: "AUTH_ERROR",

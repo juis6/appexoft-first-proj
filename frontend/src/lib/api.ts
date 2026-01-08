@@ -1,6 +1,5 @@
 import type {
   VideoDetails,
-  SearchResult,
   ApiSearchResponse,
   SearchHistoryItem,
   SearchAnalyticsItem,
@@ -10,9 +9,24 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 class ApiClient {
   private baseUrl: string;
+  private isRefreshing: boolean = false;
+  private refreshSubscribers: Array<(token: string) => void> = [];
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
+  }
+
+  private subscribeTokenRefresh(callback: (token: string) => void) {
+    this.refreshSubscribers.push(callback);
+  }
+
+  private onRefreshed(token: string) {
+    this.refreshSubscribers.forEach((callback) => callback(token));
+    this.refreshSubscribers = [];
+  }
+
+  private onRefreshFailed() {
+    this.refreshSubscribers = [];
   }
 
   private async request<T>(
@@ -32,10 +46,40 @@ class ApiClient {
       });
 
       if (response.status === 401 && !endpoint.includes("/auth/")) {
+        if (this.isRefreshing) {
+          return new Promise((resolve, reject) => {
+            this.subscribeTokenRefresh(() => {
+              this.request<T>(endpoint, options).then(resolve).catch(reject);
+            });
+          });
+        }
+
+        this.isRefreshing = true;
+
         try {
-          await this.refreshToken();
-          return this.request<T>(endpoint, options);
+          const refreshResponse = await fetch(`${this.baseUrl}/auth/refresh`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (refreshResponse.ok) {
+            this.isRefreshing = false;
+            this.onRefreshed("success");
+            return this.request<T>(endpoint, options);
+          } else {
+            this.isRefreshing = false;
+            this.onRefreshFailed();
+            console.error("Refresh token expired or invalid. Logging out...");
+            window.location.href = "/login";
+            throw new Error("Session expired. Please login again.");
+          }
         } catch (refreshError) {
+          this.isRefreshing = false;
+          this.onRefreshFailed();
+          console.error("Failed to refresh token:", refreshError);
           window.location.href = "/login";
           throw new Error("Session expired. Please login again.");
         }
@@ -114,113 +158,26 @@ class ApiClient {
 
   async searchVideos(
     query: string,
-    pageToken?: string,
-    maxResults: number = 12
-  ): Promise<SearchResult> {
-    const params = new URLSearchParams({
-      q: query,
-      maxResults: maxResults.toString(),
-    });
+    pageToken?: string
+  ): Promise<ApiSearchResponse> {
+    const params = new URLSearchParams({ q: query });
     if (pageToken) {
       params.append("pageToken", pageToken);
     }
 
-    const response = await this.request<{
-      success: boolean;
-      data: { videos: any[] };
-    }>(`/api/video/search?${params}`);
-
-    return {
-      results: response.data.videos || [],
-      totalResults: response.data.videos?.length || 0,
-      nextPageToken: undefined,
-      prevPageToken: undefined,
-    };
+    return this.request<ApiSearchResponse>(`/api/search?${params.toString()}`);
   }
 
   async getVideoDetails(videoId: string): Promise<VideoDetails> {
-    const response = await this.request<{
-      success: boolean;
-      data: { video: any };
-    }>(`/api/video/${videoId}`);
-
-    return response.data.video;
+    return this.request<VideoDetails>(`/api/video/${videoId}`);
   }
 
   async getSearchHistory(): Promise<SearchHistoryItem[]> {
-    try {
-      const response = await this.request<{
-        success: boolean;
-        data: { history: any[] };
-      }>("/api/history");
-
-      if (!response.data || !Array.isArray(response.data.history)) {
-        return [];
-      }
-
-      return response.data.history.map((item: any) => ({
-        query: item.title || item.videoId,
-        timestamp: item.createdAt,
-      }));
-    } catch (error) {
-      console.error("Failed to load history:", error);
-      return [];
-    }
+    return this.request<SearchHistoryItem[]>("/api/history");
   }
 
-  async addToHistory(
-    videoId: string,
-    title: string,
-    thumbnail: string,
-    channelTitle: string,
-    duration?: string,
-    viewCount?: string
-  ): Promise<void> {
-    await this.request("/api/history", {
-      method: "POST",
-      body: JSON.stringify({
-        videoId,
-        title,
-        thumbnail,
-        channelTitle,
-        duration,
-        viewCount,
-      }),
-    });
-  }
-
-  async getAnalytics(limit: number = 20): Promise<SearchAnalyticsItem[]> {
-    const response = await this.request<{
-      success: boolean;
-      data: { analytics: { totalSearches: number; recentSearches: any[] } };
-    }>("/api/history/analytics");
-
-    if (!response.data || !response.data.analytics) {
-      return [];
-    }
-
-    const { recentSearches } = response.data.analytics;
-
-    if (!Array.isArray(recentSearches)) {
-      console.error("recentSearches is not an array:", recentSearches);
-      return [];
-    }
-
-    const countMap = new Map<string, { query: string; count: number }>();
-
-    recentSearches.forEach((item: any) => {
-      const query = item.title || item.videoId;
-      const existing = countMap.get(query);
-      if (existing) {
-        existing.count++;
-      } else {
-        countMap.set(query, { query, count: 1 });
-      }
-    });
-
-    return Array.from(countMap.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, limit);
+  async getAnalytics(): Promise<SearchAnalyticsItem[]> {
+    return this.request<SearchAnalyticsItem[]>("/api/analytics");
   }
 }
 

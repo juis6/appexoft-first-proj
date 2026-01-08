@@ -92,20 +92,32 @@ export class AuthController {
         res.status(401).json({
           success: false,
           error: "Refresh token not found",
+          code: "NO_REFRESH_TOKEN",
         } as IApiResponse);
         return;
       }
 
-      const tokens = await this.authService.refreshTokens(refreshToken);
+      try {
+        const tokens = await this.authService.refreshTokens(refreshToken);
 
-      CookieUtil.setTokens(res, tokens.accessToken, tokens.refreshToken);
+        CookieUtil.setTokens(res, tokens.accessToken, tokens.refreshToken);
 
-      res.status(200).json({
-        success: true,
-        message: "Tokens refreshed successfully",
-      } as IApiResponse);
+        res.status(200).json({
+          success: true,
+          message: "Tokens refreshed successfully",
+        } as IApiResponse);
+      } catch (error) {
+        CookieUtil.clearTokens(res);
+
+        res.status(401).json({
+          success: false,
+          error:
+            error instanceof Error ? error.message : "Token refresh failed",
+          code: "REFRESH_TOKEN_EXPIRED",
+        } as IApiResponse);
+      }
     } catch (error) {
-      res.status(401).json({
+      res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : "Token refresh failed",
       } as IApiResponse);
