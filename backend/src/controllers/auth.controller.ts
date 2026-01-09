@@ -4,7 +4,7 @@ import { CookieUtil } from "../utils/cookie.util";
 import { IApiResponse } from "../types/interfaces";
 
 export class AuthController {
-  private readonly authService: AuthService;
+  private authService: AuthService;
 
   constructor() {
     this.authService = new AuthService();
@@ -12,27 +12,12 @@ export class AuthController {
 
   public register = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { email, password, username } = req.body;
-
-      if (!email || !password) {
-        res.status(400).json({
-          success: false,
-          error: "Email and password are required",
-        } as IApiResponse);
-        return;
-      }
-
-      const { user, tokens } = await this.authService.register({
-        email,
-        password,
-        username,
-      });
+      const { user, tokens } = await this.authService.register(req.body);
 
       CookieUtil.setTokens(res, tokens.accessToken, tokens.refreshToken);
 
       res.status(201).json({
         success: true,
-        message: "User registered successfully",
         data: { user },
       } as IApiResponse);
     } catch (error) {
@@ -45,26 +30,12 @@ export class AuthController {
 
   public login = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
-        res.status(400).json({
-          success: false,
-          error: "Email and password are required",
-        } as IApiResponse);
-        return;
-      }
-
-      const { user, tokens } = await this.authService.login({
-        email,
-        password,
-      });
+      const { user, tokens } = await this.authService.login(req.body);
 
       CookieUtil.setTokens(res, tokens.accessToken, tokens.refreshToken);
 
       res.status(200).json({
         success: true,
-        message: "Login successful",
         data: { user },
       } as IApiResponse);
     } catch (error) {
@@ -77,10 +48,9 @@ export class AuthController {
 
   public logout = async (_req: Request, res: Response): Promise<void> => {
     CookieUtil.clearTokens(res);
-
     res.status(200).json({
       success: true,
-      message: "Logout successful",
+      message: "Logged out successfully",
     } as IApiResponse);
   };
 
@@ -92,34 +62,22 @@ export class AuthController {
         res.status(401).json({
           success: false,
           error: "Refresh token not found",
-          code: "NO_REFRESH_TOKEN",
         } as IApiResponse);
         return;
       }
 
-      try {
-        const tokens = await this.authService.refreshTokens(refreshToken);
+      const tokens = await this.authService.refresh(refreshToken);
+      CookieUtil.setTokens(res, tokens.accessToken, tokens.refreshToken);
 
-        CookieUtil.setTokens(res, tokens.accessToken, tokens.refreshToken);
-
-        res.status(200).json({
-          success: true,
-          message: "Tokens refreshed successfully",
-        } as IApiResponse);
-      } catch (error) {
-        CookieUtil.clearTokens(res);
-
-        res.status(401).json({
-          success: false,
-          error:
-            error instanceof Error ? error.message : "Token refresh failed",
-          code: "REFRESH_TOKEN_EXPIRED",
-        } as IApiResponse);
-      }
+      res.status(200).json({
+        success: true,
+        message: "Tokens refreshed",
+      } as IApiResponse);
     } catch (error) {
-      res.status(500).json({
+      CookieUtil.clearTokens(res);
+      res.status(401).json({
         success: false,
-        error: error instanceof Error ? error.message : "Token refresh failed",
+        error: "Invalid refresh token",
       } as IApiResponse);
     }
   };
@@ -145,8 +103,55 @@ export class AuthController {
     } catch (error) {
       res.status(404).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to get profile",
+        error: "User not found",
       } as IApiResponse);
+    }
+  };
+
+  public forgotPassword = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        res.status(400).json({ success: false, error: "Email is required" });
+        return;
+      }
+
+      await this.authService.forgotPassword(email);
+
+      res.status(200).json({
+        success: true,
+        message: "If an account exists, a reset link has been sent",
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: "Error processing request",
+      });
+    }
+  };
+
+  public resetPassword = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        res.status(400).json({ success: false, error: "Missing fields" });
+        return;
+      }
+
+      await this.authService.resetPassword(token, password);
+
+      res.status(200).json({
+        success: true,
+        message: "Password reset successfully",
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: "Invalid or expired token",
+      });
     }
   };
 }

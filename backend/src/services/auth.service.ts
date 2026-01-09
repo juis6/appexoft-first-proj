@@ -1,95 +1,71 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../config/database";
 import { JwtUtil } from "../utils/jwt.util";
-import {
-  IUser,
-  IUserCredentials,
-  ITokenPair,
-  ITokenPayload,
-} from "../types/interfaces";
+import { EmailService } from "./email.service";
+import { IUser, IUserCredentials, ITokenPair } from "../types/interfaces";
 
 export class AuthService {
-  private static readonly SALT_ROUNDS = 10;
+  private emailService: EmailService;
+
+  constructor() {
+    this.emailService = new EmailService();
+  }
 
   public async register(
-    credentials: IUserCredentials
+    data: IUserCredentials
   ): Promise<{ user: IUser; tokens: ITokenPair }> {
-    const { email, password, username } = credentials;
-
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: data.email },
     });
 
     if (existingUser) {
-      throw new Error("User with this email already exists");
+      throw new Error("User already exists");
     }
 
-    const hashedPassword = await bcrypt.hash(password, AuthService.SALT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(data.password, 10);
 
     const user = await prisma.user.create({
       data: {
-        email,
-        username: username || email.split("@")[0],
+        email: data.email,
         password: hashedPassword,
+        username: data.username || data.email.split("@")[0],
       },
     });
 
-    const tokenPayload: ITokenPayload = {
+    const tokens = JwtUtil.generateTokenPair({
       userId: user.id,
       email: user.email,
-    };
+    });
 
-    const tokens = JwtUtil.generateTokenPair(tokenPayload);
-
-    const userResponse: IUser = {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
-
-    return { user: userResponse, tokens };
+    return { user, tokens };
   }
 
   public async login(
-    credentials: IUserCredentials
+    data: IUserCredentials
   ): Promise<{ user: IUser; tokens: ITokenPair }> {
-    const { email, password } = credentials;
-
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: data.email },
     });
 
     if (!user) {
-      throw new Error("Invalid email or password");
+      throw new Error("Invalid credentials");
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(data.password, user.password);
 
     if (!isPasswordValid) {
-      throw new Error("Invalid email or password");
+      throw new Error("Invalid credentials");
     }
 
-    const tokenPayload: ITokenPayload = {
+    const tokens = JwtUtil.generateTokenPair({
       userId: user.id,
       email: user.email,
-    };
+    });
 
-    const tokens = JwtUtil.generateTokenPair(tokenPayload);
-
-    const userResponse: IUser = {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
-
-    return { user: userResponse, tokens };
+    return { user, tokens };
   }
 
-  public async refreshTokens(refreshToken: string): Promise<ITokenPair> {
+  public async refresh(refreshToken: string): Promise<ITokenPair> {
     const payload = JwtUtil.verifyRefreshToken(refreshToken);
 
     const user = await prisma.user.findUnique({
@@ -100,12 +76,10 @@ export class AuthService {
       throw new Error("User not found");
     }
 
-    const tokenPayload: ITokenPayload = {
+    return JwtUtil.generateTokenPair({
       userId: user.id,
       email: user.email,
-    };
-
-    return JwtUtil.generateTokenPair(tokenPayload);
+    });
   }
 
   public async getProfile(userId: string): Promise<IUser> {
@@ -117,12 +91,36 @@ export class AuthService {
       throw new Error("User not found");
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    return user;
+  }
+
+  public async forgotPassword(email: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) return;
+
+    const resetToken = JwtUtil.generateResetToken({ userId: user.id });
+    await this.emailService.sendResetPasswordEmail(user.email, resetToken);
+  }
+
+  public async resetPassword(
+    token: string,
+    newPassword: string
+  ): Promise<void> {
+    const payload = JwtUtil.verifyResetToken(token);
+
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+    });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
   }
 }

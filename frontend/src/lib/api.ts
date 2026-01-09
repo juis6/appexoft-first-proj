@@ -40,7 +40,7 @@ class ApiClient {
           await this.refreshToken();
           return this.request<T>(endpoint, options);
         } catch (refreshError) {
-          window.location.href = "/login";
+          // Видалено автоматичний редірект, щоб уникнути циклів на публічних сторінках
           throw new Error("Session expired. Please login again.");
         }
       }
@@ -114,6 +114,31 @@ class ApiClient {
     } catch (error) {
       throw error;
     }
+  }
+
+  async forgotPassword(
+    email: string
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(
+      "/auth/forgot-password",
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }
+    );
+  }
+
+  async resetPassword(
+    token: string,
+    password: string
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(
+      "/auth/reset-password",
+      {
+        method: "POST",
+        body: JSON.stringify({ token, password }),
+      }
+    );
   }
 
   async searchVideos(

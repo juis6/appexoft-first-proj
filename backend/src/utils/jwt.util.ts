@@ -2,45 +2,40 @@ import jwt from "jsonwebtoken";
 import { ITokenPayload, ITokenPair } from "../types/interfaces";
 
 export class JwtUtil {
-  private static readonly ACCESS_TOKEN_SECRET =
-    process.env.ACCESS_TOKEN_SECRET!;
-  private static readonly REFRESH_TOKEN_SECRET =
-    process.env.REFRESH_TOKEN_SECRET!;
-  private static readonly ACCESS_TOKEN_EXPIRY = "15m";
-  private static readonly REFRESH_TOKEN_EXPIRY = "7d";
-
-  public static generateAccessToken(payload: ITokenPayload): string {
-    return jwt.sign(payload, this.ACCESS_TOKEN_SECRET, {
-      expiresIn: this.ACCESS_TOKEN_EXPIRY,
-    });
-  }
-
-  public static generateRefreshToken(payload: ITokenPayload): string {
-    return jwt.sign(payload, this.REFRESH_TOKEN_SECRET, {
-      expiresIn: this.REFRESH_TOKEN_EXPIRY,
-    });
-  }
+  private static readonly ACCESS_SECRET =
+    process.env.JWT_ACCESS_SECRET || "access_secret";
+  private static readonly REFRESH_SECRET =
+    process.env.JWT_REFRESH_SECRET || "refresh_secret";
+  private static readonly RESET_SECRET =
+    process.env.JWT_RESET_SECRET || "reset_secret";
 
   public static generateTokenPair(payload: ITokenPayload): ITokenPair {
-    return {
-      accessToken: this.generateAccessToken(payload),
-      refreshToken: this.generateRefreshToken(payload),
-    };
+    const accessToken = jwt.sign(payload, this.ACCESS_SECRET, {
+      expiresIn: "30m",
+    });
+
+    const refreshToken = jwt.sign(payload, this.REFRESH_SECRET, {
+      expiresIn: "7d",
+    });
+
+    return { accessToken, refreshToken };
   }
 
   public static verifyAccessToken(token: string): ITokenPayload {
-    try {
-      return jwt.verify(token, this.ACCESS_TOKEN_SECRET) as ITokenPayload;
-    } catch (error) {
-      throw new Error("Invalid or expired access token");
-    }
+    return jwt.verify(token, this.ACCESS_SECRET) as ITokenPayload;
   }
 
   public static verifyRefreshToken(token: string): ITokenPayload {
-    try {
-      return jwt.verify(token, this.REFRESH_TOKEN_SECRET) as ITokenPayload;
-    } catch (error) {
-      throw new Error("Invalid or expired refresh token");
-    }
+    return jwt.verify(token, this.REFRESH_SECRET) as ITokenPayload;
+  }
+
+  public static generateResetToken(payload: { userId: string }): string {
+    return jwt.sign(payload, this.RESET_SECRET, {
+      expiresIn: "15m",
+    });
+  }
+
+  public static verifyResetToken(token: string): { userId: string } {
+    return jwt.verify(token, this.RESET_SECRET) as { userId: string };
   }
 }
